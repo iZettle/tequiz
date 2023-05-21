@@ -1,0 +1,6 @@
+Tequiz
+======
+
+```
+merge(tetris, quiz)
+```
