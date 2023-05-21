@@ -86,13 +86,6 @@ impl Grid {
         }
     }
 
-    fn fall(&mut self) {
-        if !self.move_if_can(self.position + WIDTH) {
-            self.clear();
-            self.next_tetromino();
-        }
-    }
-
     fn clear(&mut self) {
         let mut finished: [bool; HEIGHT as usize] = [true; HEIGHT as usize];
         for y in 0..HEIGHT {
@@ -108,7 +101,6 @@ impl Grid {
         let mut y = 0;
         loop {
             if finished[y as usize] {
-                print!("{}{}", cursor::Goto(1, 1), y);
                 let mut yy = y;
                 loop {
                     for x in 0..WIDTH {
@@ -135,6 +127,13 @@ impl Grid {
         }
     }
 
+    pub fn fall(&mut self) {
+        if !self.move_if_can(self.position + WIDTH, self.rotation) {
+            self.clear();
+            self.next_tetromino();
+        }
+    }
+
     pub fn horizontal_move(&mut self, offset: i8) {
         if let Some(tetromino_id) = self.tetromino_id {
             let current = TETROMINOS[tetromino_id].get_cells(self.position, self.rotation);
@@ -154,15 +153,46 @@ impl Grid {
             }
 
             if can_move {
-                self.move_if_can((self.position as i8 + offset) as u8);
+                self.move_if_can((self.position as i8 + offset) as u8, self.rotation);
             }
         }
     }
 
-    fn move_if_can(&mut self, new_position: u8) -> bool {
+    pub fn rotate(&mut self) {
+        if let Some(tetromino_id) = self.tetromino_id {
+            let next_rotation = (self.rotation + 1) % 4;
+            let current = TETROMINOS[tetromino_id].get_cells(self.position, self.rotation);
+            let after = TETROMINOS[tetromino_id].get_cells(self.position, next_rotation);
+
+            let mut can_rotate = true;
+
+            for i in 0..after.len() {
+                if after[i] < 0 || after[i] as usize >= self.cells.len() {
+                    continue;
+                }
+
+                if after[i] as u8 % WIDTH == 0 && self.position % WIDTH >= WIDTH / 2 {
+                    can_rotate = false;
+                    break;
+                }
+
+                if after[i] as u8 % WIDTH == WIDTH - 1 && self.position % WIDTH < WIDTH / 2 {
+                    can_rotate = false;
+                    break;
+                }
+            }
+
+            if can_rotate {
+                self.move_if_can(self.position, next_rotation);
+                self.rotation = next_rotation;
+            }
+        }
+    }
+
+    fn move_if_can(&mut self, new_position: u8, new_rotation: u8) -> bool {
         let tetromino_id = self.tetromino_id.unwrap();
         let current = TETROMINOS[tetromino_id].get_cells(self.position, self.rotation);
-        let after = TETROMINOS[tetromino_id].get_cells(new_position, self.rotation);
+        let after = TETROMINOS[tetromino_id].get_cells(new_position, new_rotation);
 
         let mut can_move = true;
 

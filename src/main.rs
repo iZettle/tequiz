@@ -44,7 +44,7 @@ struct Game<R, W: Write> {
 impl<R: Read, W: Write> Game<R, W> {
     fn new(stdin: R, stdout: W, scale: Scale) -> Game<R, RawTerminal<W>> {
         let grid = grid::Grid::new(
-            time::Duration::from_nanos(200_000_000)
+            time::Duration::from_nanos(1_200_000_000)
         );
 
         Game {
@@ -74,6 +74,8 @@ impl<R: Read, W: Write> Game<R, W> {
                     b'\x1b' | b'q' => break 'main,
                     b'h' => self.grid.horizontal_move(-1),
                     b'l' => self.grid.horizontal_move(1),
+                    b'k' => self.grid.rotate(),
+                    b'j' => self.grid.fall(),
                     _ => (),
                 }
 
