@@ -3,7 +3,7 @@ use rand::{self, rngs::ThreadRng, Rng};
 use termion::cursor;
 
 pub const WIDTH: u8 = 10;
-pub const HEIGHT: u8 = 21;
+pub const HEIGHT: u8 = 20;
 
 #[derive(Clone)]
 pub struct Tetromino {
@@ -22,7 +22,7 @@ impl Tetromino {
 }
 
 const TETROMINO_VARIANT: usize = 2;
-const TETROMINOS: [Tetromino; TETROMINO_VARIANT] = [
+const TETROMINOES: [Tetromino; TETROMINO_VARIANT] = [
     //           []
     // []()[][]  ()
     //           []
@@ -48,6 +48,8 @@ const TETROMINOS: [Tetromino; TETROMINO_VARIANT] = [
     },
 ];
 
+const SCORE_MAP:[u32; 5] = [0, 4, 10, 30, 120];
+
 pub struct Grid {
     pub cells: [bool; (WIDTH * HEIGHT) as usize],
 
@@ -56,6 +58,12 @@ pub struct Grid {
     rotation: u8,
     rate: Duration,
     timer: Duration,
+    gravity_bonus: u8,
+
+    pub score: u32,
+    pub cleared: u32,
+
+    pub level: u8,
 
     rng: ThreadRng,
 }
@@ -69,6 +77,10 @@ impl Grid {
             rotation: 0,
             rate,
             timer: Duration::ZERO,
+            gravity_bonus: HEIGHT - 1,
+            score: 0,
+            cleared: 0,
+            level: 0,
             rng: rand::thread_rng(),
         }
     }
@@ -80,63 +92,24 @@ impl Grid {
             self.timer = self.timer - self.rate;
 
             match self.tetromino_id {
-                Some(_) => self.fall(),
+                Some(_) => self.fall(true),
                 None => self.next_tetromino(),
             }
         }
     }
 
-    fn clear(&mut self) {
-        let mut finished: [bool; HEIGHT as usize] = [true; HEIGHT as usize];
-        for y in 0..HEIGHT {
-            for x in 0..WIDTH {
-                if !self.cells[(y * WIDTH + x) as usize] {
-                    finished[y as usize] = false;
-                    break;
-                }
-            }
-        }
-
-
-        let mut y = 0;
-        loop {
-            if finished[y as usize] {
-                let mut yy = y;
-                loop {
-                    for x in 0..WIDTH {
-                        if yy == 0 {
-                            self.cells[(yy * WIDTH + x) as usize] = false;
-                        } else {
-                            self.cells[(yy * WIDTH + x) as usize] = self.cells[((yy - 1) * WIDTH + x) as usize];
-                        }
-                    }
-
-                    if yy == 0 {
-                        break;
-                    }
-
-                    yy = yy - 1;
-                }
-            }
-
-            if y == HEIGHT - 1 {
-                break;
-            }
-
-            y = y + 1;
-        }
-    }
-
-    pub fn fall(&mut self) {
+    pub fn fall(&mut self, due_to_gravity: bool) {
         if !self.move_if_can(self.position + WIDTH, self.rotation) {
             self.clear();
             self.next_tetromino();
+        } else if due_to_gravity {
+            self.gravity_bonus = self.gravity_bonus + 1;
         }
     }
 
     pub fn horizontal_move(&mut self, offset: i8) {
         if let Some(tetromino_id) = self.tetromino_id {
-            let current = TETROMINOS[tetromino_id].get_cells(self.position, self.rotation);
+            let current = TETROMINOES[tetromino_id].get_cells(self.position, self.rotation);
             let mut can_move = true;
             for i in 0..current.len() {
                 if current[i] < 0 {
@@ -161,8 +134,8 @@ impl Grid {
     pub fn rotate(&mut self) {
         if let Some(tetromino_id) = self.tetromino_id {
             let next_rotation = (self.rotation + 1) % 4;
-            let current = TETROMINOS[tetromino_id].get_cells(self.position, self.rotation);
-            let after = TETROMINOS[tetromino_id].get_cells(self.position, next_rotation);
+            let current = TETROMINOES[tetromino_id].get_cells(self.position, self.rotation);
+            let after = TETROMINOES[tetromino_id].get_cells(self.position, next_rotation);
 
             let mut can_rotate = true;
 
@@ -189,10 +162,64 @@ impl Grid {
         }
     }
 
+    fn clear(&mut self) {
+        let mut finished: [bool; HEIGHT as usize] = [true; HEIGHT as usize];
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                if !self.cells[(y * WIDTH + x) as usize] {
+                    finished[y as usize] = false;
+                    break;
+                }
+            }
+        }
+
+
+        let mut y = 0;
+        let mut cleared = 0;
+        loop {
+            if finished[y as usize] {
+                let mut yy = y;
+                loop {
+                    for x in 0..WIDTH {
+                        if yy == 0 {
+                            self.cells[(yy * WIDTH + x) as usize] = false;
+                        } else {
+                            self.cells[(yy * WIDTH + x) as usize] = self.cells[((yy - 1) * WIDTH + x) as usize];
+                        }
+                    }
+
+                    if yy == 0 {
+                        break;
+                    }
+
+                    yy = yy - 1;
+                }
+
+                cleared = cleared + 1;
+            }
+
+            if y == HEIGHT - 1 {
+                break;
+            }
+
+            y = y + 1;
+        }
+
+        if cleared > 0 {
+            self.update_score(cleared);
+        }
+    }
+
+    fn update_score(&mut self, cleared: u8) {
+        self.cleared  = self.cleared + cleared as u32;
+        let score = SCORE_MAP[cleared as usize] * self.gravity_bonus as u32 * (self.level as u32 + 1);
+        self.score = self.score + score;
+    }
+
     fn move_if_can(&mut self, new_position: u8, new_rotation: u8) -> bool {
         let tetromino_id = self.tetromino_id.unwrap();
-        let current = TETROMINOS[tetromino_id].get_cells(self.position, self.rotation);
-        let after = TETROMINOS[tetromino_id].get_cells(new_position, new_rotation);
+        let current = TETROMINOES[tetromino_id].get_cells(self.position, self.rotation);
+        let after = TETROMINOES[tetromino_id].get_cells(new_position, new_rotation);
 
         let mut can_move = true;
 
@@ -246,6 +273,7 @@ impl Grid {
         self.tetromino_id = Some(n);
         self.rotation = 0;
         self.reset_position();
+        self.gravity_bonus = 0;
     }
 
     pub fn reset_position(&mut self) {

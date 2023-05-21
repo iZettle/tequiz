@@ -75,7 +75,7 @@ impl<R: Read, W: Write> Game<R, W> {
                     b'h' => self.grid.horizontal_move(-1),
                     b'l' => self.grid.horizontal_move(1),
                     b'k' => self.grid.rotate(),
-                    b'j' => self.grid.fall(),
+                    b'j' => self.grid.fall(false),
                     _ => (),
                 }
 
@@ -87,6 +87,7 @@ impl<R: Read, W: Write> Game<R, W> {
 
             // draw
             self.draw_grid()?;
+            self.draw_status()?;
 
             self.stdout.flush()?;
         }
@@ -123,9 +124,21 @@ impl<R: Read, W: Write> Game<R, W> {
             let x = i as u8 % grid::WIDTH;
 
             let x = offset_x + x * self.scale.x;
-            let c = if self.grid.cells[i] { "[]" } else { "  " };
+            let c = if self.grid.cells[i] { "[]" } else { " ." };
             write!(self.stdout, "{}{}", cursor::Goto(x as u16, y as u16), c)?;
         }
+
+        Ok(())
+    }
+
+    fn draw_status(&mut self) -> Result<()> {
+        let grid_width = grid::WIDTH * self.scale.x;
+        let offset_x = LAYOUT_QUIZ_WIDTH + grid_width + 6;
+        let offset_y = grid::HEIGHT * self.scale.y;
+
+        write!(self.stdout, "{}{}{}", cursor::Goto(offset_x as u16, (offset_y - 4) as u16), "SCORE: ", self.grid.score)?;
+        write!(self.stdout, "{}{}{}", cursor::Goto(offset_x as u16, (offset_y - 2) as u16), "LEVEL: ", self.grid.level)?;
+        write!(self.stdout, "{}{}{}", cursor::Goto(offset_x as u16, (offset_y - 0) as u16), "LINES: ", self.grid.cleared)?;
 
         Ok(())
     }
