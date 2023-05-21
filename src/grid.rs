@@ -1,6 +1,5 @@
 use std::time::Duration;
 use rand::{self, rngs::ThreadRng, Rng};
-use termion::cursor;
 
 pub const WIDTH: u8 = 10;
 pub const HEIGHT: u8 = 20;
@@ -21,7 +20,7 @@ impl Tetromino {
     }
 }
 
-const TETROMINO_VARIANT: usize = 2;
+const TETROMINO_VARIANT: usize = 7;
 const TETROMINOES: [Tetromino; TETROMINO_VARIANT] = [
     //           []
     // []()[][]  ()
@@ -44,6 +43,66 @@ const TETROMINOES: [Tetromino; TETROMINO_VARIANT] = [
             [0, 1, WIDTH as i16, (WIDTH + 1) as i16],
             [0, 1, WIDTH as i16, (WIDTH + 1) as i16],
             [0, 1, WIDTH as i16, (WIDTH + 1) as i16],
+        ]
+    },
+
+    // [][]      []
+    //   ()[]  ()[]
+    //         []
+    Tetromino {
+        rotations: [
+            [(0 - WIDTH as i16 - 1), (0 - WIDTH as i16), 0, 1],
+            [(0 - WIDTH as i16 + 1), 0, 1, WIDTH as i16],
+            [(0 - WIDTH as i16 - 1), (0 - WIDTH as i16), 0, 1],
+            [(0 - WIDTH as i16 + 1), 0, 1, WIDTH as i16],
+        ]
+    },
+
+    //   [][]  []
+    // []()    []()
+    //           []
+    Tetromino {
+        rotations: [
+            [-1, 0, 0 - WIDTH as i16, 0 - WIDTH as i16 + 1],
+            [0 - WIDTH as i16 - 1, -1, 0, WIDTH as i16],
+            [-1, 0, 0 - WIDTH as i16, 0 - WIDTH as i16 + 1],
+            [0 - WIDTH as i16 - 1, -1, 0, WIDTH as i16],
+        ]
+    },
+
+    //         [][]      []  []
+    // []()[]    ()  []()[]  ()
+    // []        []          [][]
+    Tetromino {
+        rotations: [
+            [WIDTH as i16 - 1, -1, 0, 1],
+            [0 - WIDTH as i16 - 1, 0 - WIDTH as i16, 0, WIDTH as i16],
+            [-1, 0, 1, 0 - WIDTH as i16 + 1],
+            [0 - WIDTH as i16, 0, WIDTH as i16, WIDTH as i16 + 1],
+        ]
+    },
+
+    // []      [][]            []
+    // []()[]  ()    []()[]    ()
+    //         []        []  [][]
+    Tetromino {
+        rotations: [
+            [0 - WIDTH as i16 - 1, -1, 0, 1],
+            [0 - WIDTH as i16 + 1, 0 - WIDTH as i16, 0, WIDTH as i16],
+            [-1, 0, 1, WIDTH as i16 + 1],
+            [0 - WIDTH as i16, 0, WIDTH as i16, WIDTH as i16 - 1],
+        ]
+    },
+
+    //   []    []            []
+    // []()[]  ()[] []()[] []()
+    //         []     []     []
+    Tetromino {
+        rotations: [
+            [0 - WIDTH as i16, -1, 0, 1],
+            [0 - WIDTH as i16, 0, 1, WIDTH as i16],
+            [-1, 0, 1, WIDTH as i16],
+            [0 - WIDTH as i16, -1, 0, WIDTH as i16],
         ]
     },
 ];
@@ -99,64 +158,26 @@ impl Grid {
     }
 
     pub fn fall(&mut self, due_to_gravity: bool) {
-        if !self.move_if_can(self.position + WIDTH, self.rotation) {
-            self.clear();
-            self.next_tetromino();
-        } else if due_to_gravity {
-            self.gravity_bonus = self.gravity_bonus + 1;
+        if let Some(_) = self.tetromino_id {
+            if !self.move_if_can(self.position + WIDTH, self.rotation) {
+                self.clear();
+                self.next_tetromino();
+            } else if due_to_gravity {
+                self.gravity_bonus = self.gravity_bonus + 1;
+            }
         }
     }
 
-    pub fn horizontal_move(&mut self, offset: i8) {
-        if let Some(tetromino_id) = self.tetromino_id {
-            let current = TETROMINOES[tetromino_id].get_cells(self.position, self.rotation);
-            let mut can_move = true;
-            for i in 0..current.len() {
-                if current[i] < 0 {
-                    continue;
-                }
-
-                if offset < 0 && current[i] as u8 % WIDTH == 0 {
-                    can_move = false;
-                }
-
-                if offset > 0 && current[i] as u8 % WIDTH == WIDTH - 1 {
-                    can_move = false;
-                }
-            }
-
-            if can_move {
-                self.move_if_can((self.position as i8 + offset) as u8, self.rotation);
-            }
+    pub fn horizontal_move(&mut self, offset: i16) {
+        if let Some(_) = self.tetromino_id {
+            self.move_if_can((self.position as i16 + offset) as u8, self.rotation);
         }
     }
 
     pub fn rotate(&mut self) {
-        if let Some(tetromino_id) = self.tetromino_id {
+        if let Some(_) = self.tetromino_id {
             let next_rotation = (self.rotation + 1) % 4;
-            let current = TETROMINOES[tetromino_id].get_cells(self.position, self.rotation);
-            let after = TETROMINOES[tetromino_id].get_cells(self.position, next_rotation);
-
-            let mut can_rotate = true;
-
-            for i in 0..after.len() {
-                if after[i] < 0 || after[i] as usize >= self.cells.len() {
-                    continue;
-                }
-
-                if after[i] as u8 % WIDTH == 0 && self.position % WIDTH >= WIDTH / 2 {
-                    can_rotate = false;
-                    break;
-                }
-
-                if after[i] as u8 % WIDTH == WIDTH - 1 && self.position % WIDTH < WIDTH / 2 {
-                    can_rotate = false;
-                    break;
-                }
-            }
-
-            if can_rotate {
-                self.move_if_can(self.position, next_rotation);
+            if self.move_if_can(self.position, next_rotation) {
                 self.rotation = next_rotation;
             }
         }
@@ -233,20 +254,19 @@ impl Grid {
                 break;
             }
 
-            if self.cells[after[i] as usize] {
-                // check if this cell is in the tetromino itself
-                let mut is_self = false;
-                for j in 0..current.len() {
-                    if after[i] == current[j] {
-                        is_self = true;
-                        break;
-                    }
-                }
+            if self.cells[after[i] as usize] && !current.contains(&after[i]) {
+                can_move = false;
+                break;
+            }
 
-                if !is_self {
-                    can_move = false;
-                    break;
-                }
+            if after[i] as u8 % WIDTH == 0 && self.position % WIDTH >= WIDTH / 2 {
+                can_move = false;
+                break;
+            }
+
+            if after[i] as u8 % WIDTH == WIDTH - 1 && self.position % WIDTH < WIDTH / 2 {
+                can_move = false;
+                break;
             }
         }
 
