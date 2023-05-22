@@ -112,19 +112,19 @@ const SCORE_MAP:[u32; 5] = [0, 4, 10, 30, 120];
 pub struct Grid {
     pub cells: [bool; (WIDTH * HEIGHT) as usize],
 
-    tetromino_id: Option<usize>,
-    position: u8,
-    rotation: u8,
-    rate: Duration,
-    timer: Duration,
-    gravity_bonus: u8,
+    pub tetromino_id: Option<usize>,
+    pub position: u8,
+    pub rotation: u8,
+    pub rate: Duration,
+    pub timer: Duration,
+    pub gravity_bonus: u8,
 
     pub score: u32,
     pub cleared: u32,
 
     pub level: u8,
 
-    rng: ThreadRng,
+    pub rng: ThreadRng,
 }
 
 impl Grid {
