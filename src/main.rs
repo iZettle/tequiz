@@ -1,10 +1,15 @@
 mod grid;
+mod quiz;
 
+use rand::{Rng, thread_rng};
+use rand::seq::SliceRandom;
 use termion::{async_stdin, clear, color, cursor, style};
 use termion::raw::{IntoRawMode, RawTerminal};
 
 use std::io::{self, Read, Write, Result};
 use std::{time, thread};
+
+use quiz::Quiz;
 
 const LAYOUT_QUIZ_WIDTH: u16 = 32;
 
@@ -41,6 +46,26 @@ impl Scale {
     }
 }
 
+struct CurrentQuiz {
+    pub question: String,
+    pub answers: Vec<String>,
+    pub correct_answer_id: u8,
+}
+
+impl CurrentQuiz {
+    pub fn new(
+        question: String,
+        answers: Vec<String>,
+        correct_answer_id: u8,
+    ) -> CurrentQuiz {
+        CurrentQuiz {
+            question,
+            answers,
+            correct_answer_id,
+        }
+    }
+}
+
 struct Game<R, W: Write> {
     grid: grid::Grid,
     stdin: R,
@@ -48,6 +73,9 @@ struct Game<R, W: Write> {
     offset_x: u16,
     offset_y: u16,
     scale: Scale,
+
+    quizzes: Vec<Quiz>,
+    quiz: Option<CurrentQuiz>,
 }
 
 impl<R: Read, W: Write> Game<R, W> {
@@ -56,6 +84,9 @@ impl<R: Read, W: Write> Game<R, W> {
             time::Duration::from_nanos(1_200_000_000)
         );
 
+        let f = std::fs::File::open("quizzes.yaml").unwrap();
+        let quizzes: Vec<Quiz> = serde_yaml::from_reader(f).unwrap();
+
         Game {
             grid,
             stdin,
@@ -63,11 +94,14 @@ impl<R: Read, W: Write> Game<R, W> {
             offset_x: (term_width - grid::WIDTH as u16 * scale.x as u16) / 2 - LAYOUT_QUIZ_WIDTH,
             offset_y: term_height - grid::HEIGHT as u16 - 8,
             scale,
+            quizzes,
+            quiz: None,
         }
     }
 
     fn run(&mut self) -> Result<()> {
         write!(self.stdout, "{}{}{}{}", clear::All, style::Reset, cursor::Goto(1, 1), cursor::Hide)?;
+
         self.draw_layout()?;
         self.stdout.flush()?;
 
@@ -77,9 +111,7 @@ impl<R: Read, W: Write> Game<R, W> {
             thread::sleep(tick);
 
             if self.grid.position < grid::WIDTH {
-                write!(self.stdout, "{}{}", cursor::Goto(1, 1), '?')?;
-            } else {
-                write!(self.stdout, "{}{}", cursor::Goto(1, 1), '!')?;
+                self.quiz_rng();
             }
 
             // process input
@@ -90,11 +122,18 @@ impl<R: Read, W: Write> Game<R, W> {
                 }
 
                 match b[0] {
+                    // quit
                     b'\x1b' | b'q' => break 'main,
-                    b'h' => self.grid.horizontal_move(-1),
-                    b'l' => self.grid.horizontal_move(1),
-                    b'k' => self.grid.rotate(),
-                    b'j' => self.grid.fall(false),
+
+                    // answer quiz
+                    n @ b'1'..=b'4' => self.answer(n),
+
+                    // play tetris
+                    b'h' if self.quiz.is_none() => self.grid.horizontal_move(-1),
+                    b'l' if self.quiz.is_none() => self.grid.horizontal_move(1),
+                    b'k' if self.quiz.is_none() => self.grid.rotate(),
+                    b'j' if self.quiz.is_none() => self.grid.fall(false),
+
                     _ => (),
                 }
 
@@ -105,6 +144,7 @@ impl<R: Read, W: Write> Game<R, W> {
             self.grid.tick(tick);
 
             // draw
+            self.draw_quiz()?;
             self.draw_grid()?;
             self.draw_status()?;
 
@@ -164,10 +204,117 @@ impl<R: Read, W: Write> Game<R, W> {
 
         Ok(())
     }
+
+    fn quiz_rng(&mut self) {
+        if self.quiz.is_some() {
+            return;
+        }
+
+        let id = rand::thread_rng().gen_range(0..self.quizzes.len());
+        let quiz = &self.quizzes[id];
+
+        let mut answers = quiz.wrong_answers.clone();
+        answers.shuffle(&mut thread_rng());
+
+        let correct_answer_id = thread_rng().gen_range(0..=answers.len());
+        answers.insert(correct_answer_id, quiz.answer.clone());
+
+        self.quiz = Some(CurrentQuiz::new(
+            quiz.question.clone(),
+            answers,
+            correct_answer_id as u8,
+        ));
+    }
+
+    fn answer(&mut self, n: u8) {
+        if let Some(quiz) = &self.quiz {
+            if n - 48 != quiz.correct_answer_id + 1 {
+                self.grid.punish();
+            }
+        }
+
+        self.quiz = None;
+    }
+
+    fn draw_quiz(&mut self) -> Result<()> {
+        if let Some(quiz) = &self.quiz {
+
+            // draw questoin
+            let line_width = LAYOUT_QUIZ_WIDTH - 4;
+            let offset_x = self.offset_x + 2;
+            let offset_y = self.offset_y;
+
+            let lines = split_into_lines(&quiz.question, line_width);
+            for i in 0..lines.len() {
+                write!(self.stdout, "{}{}", cursor::Goto(offset_x, offset_y + i as u16), lines[i])?;
+            }
+
+            // draw answer
+            let line_width = LAYOUT_QUIZ_WIDTH - 7;
+            let mut offset_y = self.offset_y + lines.len() as u16 + 1;
+
+            for i in 0..quiz.answers.len() {
+                let lines = split_into_lines(&quiz.answers[i], line_width);
+                write!(self.stdout, "{}{}. ", cursor::Goto(offset_x, offset_y as u16), i + 1)?;
+
+                for j in 0..lines.len() {
+                    write!(self.stdout, "{}{}", cursor::Goto(offset_x + 3, offset_y as u16), lines[j])?;
+                    offset_y = offset_y + 1;
+                }
+
+                offset_y = offset_y + 1;
+            }
+
+            Ok(())
+        } else {
+            self.clear_area(0, 0, LAYOUT_QUIZ_WIDTH, grid::HEIGHT as u16 + 10)
+        }
+    }
+
+    fn clear_area(&mut self, from_x: u16, from_y: u16, width: u16, height: u16) -> Result<()> {
+        let offset_x = self.offset_x + from_x;
+        let offset_y = self.offset_y + from_y;
+
+        let spaces = " ".repeat(width as usize);
+
+        for y in offset_y..offset_y + height {
+            write!(self.stdout, "{}{}", cursor::Goto(offset_x, y), spaces)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl<R, W: Write> Drop for Game<R, W> {
     fn drop(&mut self) {
         write!(self.stdout, "{}{}", style::Reset, cursor::Show).unwrap();
     }
+}
+
+fn split_into_lines(text: &String, width: u16) -> Vec<String> {
+    let mut lines = Vec::with_capacity(text.len() / width as usize + 1);
+    let mut iter = text.split_whitespace();
+
+    let mut line = String::with_capacity(width as usize);
+    loop {
+        if let Some(word) = iter.next() {
+            if line.len() + word.len() + 1 > width as usize {
+                lines.push(line.to_string());
+                line = String::with_capacity(width as usize);
+            }
+
+            if line.len() > 0 {
+                line = line + " " + word;
+            } else {
+                line = line + word;
+            }
+        } else {
+            if line.len() > 0 {
+                lines.push(line.to_string());
+            }
+            break;
+        }
+    }
+
+    return lines;
 }

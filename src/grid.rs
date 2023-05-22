@@ -1,5 +1,6 @@
 use std::time::Duration;
 use rand::{self, rngs::ThreadRng, Rng};
+use termion::cursor;
 
 pub const WIDTH: u8 = 10;
 pub const HEIGHT: u8 = 20;
@@ -298,5 +299,21 @@ impl Grid {
 
     pub fn reset_position(&mut self) {
         self.position = WIDTH / 2 - 1;
+    }
+
+    pub fn punish(&mut self) {
+        let current = self.tetromino_id.map(|id| {
+            TETROMINOES[id].get_cells(self.position, self.rotation)
+        });
+
+        for i in 0..self.cells.len() - WIDTH as usize {
+            let is_current = current.map_or(false, |tetromino| {
+                tetromino.contains(&(i as i16)) || tetromino.contains(&((i + WIDTH as usize) as i16))
+            });
+
+            if !is_current {
+                self.cells[i] = self.cells[i + WIDTH as usize];
+            }
+        }
     }
 }
