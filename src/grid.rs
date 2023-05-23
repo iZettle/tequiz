@@ -1,5 +1,5 @@
 use std::time::Duration;
-use rand::{self, rngs::ThreadRng, Rng};
+use rand::{self, rngs::ThreadRng, Rng, thread_rng, seq::SliceRandom};
 use termion::cursor;
 
 pub const WIDTH: u8 = 10;
@@ -306,6 +306,7 @@ impl Grid {
             TETROMINOES[id].get_cells(self.position, self.rotation)
         });
 
+        // move all cells 1 row up
         for i in 0..self.cells.len() - WIDTH as usize {
             let is_current = current.map_or(false, |tetromino| {
                 tetromino.contains(&(i as i16)) || tetromino.contains(&((i + WIDTH as usize) as i16))
@@ -314,6 +315,23 @@ impl Grid {
             if !is_current {
                 self.cells[i] = self.cells[i + WIDTH as usize];
             }
+        }
+
+        // populate random cells in last row - make sure it's not complete
+        let mut last_row: [bool; WIDTH as usize] = [false; WIDTH as usize];
+        let mut ratio = 100;
+        for i in 0..last_row.len() {
+            if thread_rng().gen_ratio(ratio, 100) {
+                last_row[i] = true;
+                ratio = ratio - 100 / WIDTH as u32;
+            }
+        }
+
+        last_row.shuffle(&mut thread_rng());
+
+        let n = self.cells.len() - WIDTH as usize;
+        for i in 0..last_row.len() {
+            self.cells[n + i] = last_row[i];
         }
     }
 }
