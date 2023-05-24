@@ -115,20 +115,18 @@ pub struct Grid {
     pub cells: [bool; (WIDTH * HEIGHT) as usize],
 
     pub tetromino_id: Option<usize>,
+    pub on_new_tetromino: bool,
     pub position: u8,
     pub rotation: u8,
     pub interval: Duration,
     pub timer: Duration,
     pub gravity_bonus: u8,
-
     pub score: u32,
     pub cleared: u32,
-
     pub level: u8,
-
     pub rng: ThreadRng,
-
     pub game_over: bool,
+
 }
 
 impl Grid {
@@ -136,6 +134,7 @@ impl Grid {
         Grid {
             cells: [false; (WIDTH * HEIGHT) as usize],
             tetromino_id: None,
+            on_new_tetromino: false,
             position: 0,
             rotation: 0,
             interval: INIT_INTERVAL,
@@ -324,6 +323,8 @@ impl Grid {
                 self.game_over = true;
             }
         }
+
+        self.on_new_tetromino = !self.game_over;
     }
 
     fn reset_position(&mut self) {
@@ -370,6 +371,7 @@ impl Grid {
 
     pub fn reset(&mut self) {
         self.tetromino_id = None;
+        self.on_new_tetromino = false;
         self.interval = INIT_INTERVAL;
         self.timer = Duration::ZERO;
         self.gravity_bonus =  HEIGHT - 1;
@@ -379,5 +381,9 @@ impl Grid {
         self.game_over = false;
 
         self.cells = [false; (WIDTH * HEIGHT) as usize];
+    }
+
+    pub fn reset_on_new_tetromino(&mut self) {
+        self.on_new_tetromino = false;
     }
 }

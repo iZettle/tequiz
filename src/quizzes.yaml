@@ -1,0 +1,7 @@
+---
+- question: Which one is not a planet?
+  answer: Pluto
+  wrong_answers:
+    - Mars
+    - Mercury
+    - Venus

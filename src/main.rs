@@ -1,24 +1,37 @@
 mod grid;
 mod quiz;
 
+use clap::Parser;
 use rand::{Rng, thread_rng};
 use rand::seq::SliceRandom;
-use termion::{async_stdin, clear, color, cursor, style};
+use termion::{async_stdin, clear, cursor, style};
 use termion::raw::{IntoRawMode, RawTerminal};
 
 use std::io::{self, Read, Write, Result};
-use std::{time, thread};
+use std::{time, thread, cmp};
 
 use quiz::Quiz;
 
-const LAYOUT_QUIZ_WIDTH: u16 = 32;
+const QUIZZES: &str = include_str!("quizzes.yaml");
+
+const LAYOUT_QUIZ_WIDTH: u16 = 28;
 
 const ARROW_UP: (u8, u8, u8) = (27, 91, 65);
 const ARROW_DOWN: (u8, u8, u8) = (27, 91, 66);
 const ARROW_LEFT: (u8, u8, u8) = (27, 91, 68);
 const ARROW_RIGHT: (u8, u8, u8) = (27, 91, 67);
 
+#[derive(Parser, Debug)]
+struct Args {
+    /// Set the chance that quizzes pop up (0-100)
+    #[arg(long, value_name = "QUIZ RATIO", default_value_t = 20)]
+    quiz_ratio: u8,
+}
+
 fn main() {
+    let args = Args::parse();
+    let quiz_ratio = cmp::min(args.quiz_ratio, 100);
+
     let stdout = io::stdout();
     let stdin = async_stdin();
 
@@ -33,6 +46,7 @@ fn main() {
         term_width,
         term_height,
         scale,
+        quiz_ratio,
     );
 
     if let Err(err) = game.run() {
@@ -81,14 +95,14 @@ struct Game<R, W: Write> {
 
     quizzes: Vec<Quiz>,
     quiz: Option<CurrentQuiz>,
+    quiz_ratio: u8,
 }
 
 impl<R: Read, W: Write> Game<R, W> {
-    fn new(stdin: R, stdout: W, term_width: u16, term_height: u16, scale: Scale) -> Game<R, RawTerminal<W>> {
+    fn new(stdin: R, stdout: W, term_width: u16, term_height: u16, scale: Scale, quiz_ratio: u8) -> Game<R, RawTerminal<W>> {
         let grid = grid::Grid::new();
 
-        let f = std::fs::File::open("quizzes.yaml").unwrap();
-        let quizzes: Vec<Quiz> = serde_yaml::from_reader(f).unwrap();
+        let quizzes: Vec<Quiz> = serde_yaml::from_str(QUIZZES).unwrap();
 
         Game {
             grid,
@@ -99,6 +113,7 @@ impl<R: Read, W: Write> Game<R, W> {
             scale,
             quizzes,
             quiz: None,
+            quiz_ratio,
         }
     }
 
@@ -113,8 +128,9 @@ impl<R: Read, W: Write> Game<R, W> {
         'main: loop {
             thread::sleep(interval);
 
-            if self.grid.position < grid::WIDTH {
-                //self.quiz_rng();
+            if self.grid.on_new_tetromino {
+                self.grid.reset_on_new_tetromino();
+                self.quiz_rng();
             }
 
             // process input
@@ -134,7 +150,10 @@ impl<R: Read, W: Write> Game<R, W> {
                     (b'j', _, _) | ARROW_DOWN  if self.quiz.is_none() => self.grid.fall(false),
 
                     // reset game
-                    (b'r', _, _) if self.grid.game_over => self.grid.reset(),
+                    (b'r', _, _) => {
+                        self.quiz = None;
+                        self.grid.reset();
+                    }
 
                     _ => (),
                 }
@@ -148,8 +167,14 @@ impl<R: Read, W: Write> Game<R, W> {
             self.grid.tick(interval);
 
             // draw
-            self.draw_quiz()?;
             self.draw_grid()?;
+
+            if self.grid.game_over {
+                self.draw_game_over()?;
+                self.quiz = None;
+            }
+
+            self.draw_quiz()?;
             self.draw_status()?;
 
             self.stdout.flush()?;
@@ -166,6 +191,7 @@ impl<R: Read, W: Write> Game<R, W> {
                 4 => "  ← / h: move left",
                 5 => "  → / l: move right",
                 6 => "  ↓ / j: move down",
+                7 => "      r: reset",
                 _ => "",
             };
 
@@ -191,10 +217,6 @@ impl<R: Read, W: Write> Game<R, W> {
     }
 
     fn draw_grid(&mut self) -> Result<()> {
-        if self.grid.game_over {
-            return self.draw_game_over();
-        }
-
         let offset_x = self.offset_x + LAYOUT_QUIZ_WIDTH + 2;
 
         for i in 0..self.grid.cells.len() {
@@ -208,20 +230,33 @@ impl<R: Read, W: Write> Game<R, W> {
             write!(self.stdout, "{}{}", cursor::Goto(x as u16, y as u16), c)?;
         }
 
+        if self.quiz.is_some() {
+            self.draw_quiz_lock()?;
+        }
+
+        Ok(())
+    }
+
+    fn draw_quiz_lock(&mut self) -> Result<()> {
+        let x = LAYOUT_QUIZ_WIDTH + 2;
+        let y = 1;
+
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 3), "╭──────────╮")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 4), "   locked  ")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 5), "╰──────────╯")?;
+
         Ok(())
     }
 
     fn draw_game_over(&mut self) -> Result<()> {
         let x = LAYOUT_QUIZ_WIDTH + 2;
         let y = 1;
-        self.clear_area(x, y, grid::WIDTH as u16 * 2, grid::HEIGHT as u16)?;
 
         write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 3), "╭──────────╮")?;
-        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 4), "  G A M E")?;
-        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 6), "   O V E R")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 4), "  G A M E   ")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 5), "            ")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 6), "   O V E R  ")?;
         write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 7), "╰──────────╯")?;
-        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 10), "To try again")?;
-        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 5, y + self.offset_y + 12), "Press 'r'")?;
 
         Ok(())
     }
@@ -243,7 +278,11 @@ impl<R: Read, W: Write> Game<R, W> {
             return;
         }
 
-        let id = rand::thread_rng().gen_range(0..self.quizzes.len());
+        if !thread_rng().gen_ratio(self.quiz_ratio as u32, 100) {
+            return;
+        }
+
+        let id = thread_rng().gen_range(0..self.quizzes.len());
         let quiz = &self.quizzes[id];
 
         let mut answers = quiz.wrong_answers.clone();
@@ -275,7 +314,7 @@ impl<R: Read, W: Write> Game<R, W> {
             // draw questoin
             let line_width = LAYOUT_QUIZ_WIDTH - 4;
             let offset_x = self.offset_x + 2;
-            let offset_y = self.offset_y;
+            let offset_y = self.offset_y + 3;
 
             let lines = split_into_lines(&quiz.question, line_width);
             for i in 0..lines.len() {
@@ -284,7 +323,7 @@ impl<R: Read, W: Write> Game<R, W> {
 
             // draw answer
             let line_width = LAYOUT_QUIZ_WIDTH - 7;
-            let mut offset_y = self.offset_y + lines.len() as u16 + 1;
+            let mut offset_y = self.offset_y + lines.len() as u16 + 4;
 
             for i in 0..quiz.answers.len() {
                 let lines = split_into_lines(&quiz.answers[i], line_width);
