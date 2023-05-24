@@ -5,17 +5,17 @@ Tequiz
 merge(tetris, quiz)
 ```
 
-Tetris was the very first programming project I finished back in 2002-2003.
+Tetris was the very first programming project I finished in 2002-2003.
 Back then I used C# and it was a GUI application running in Windows.
 
-Recently I watched the movie [Tetris]. When I saw tetrominoes are rendered by
-pair of `[]`, I said: Beautiful.
+Recently I watched the movie [Tetris]. When I saw tetrominoes were rendered as
+`[]` in the early versions, I was like: "Beautiful!".
 
-So, after 20 years, I decided to implement the game one more time. This time I
-make it a TUI application, and of course, each tetromino is rendered as `[]` by
-default:)
+So, after 20 years, I want to implement the game one more time, and make it
+a TUI application.
 
-However, worth noting that:
+
+## Fun fact:
 
 > The game has monochrome graphics, and in the first revision of the game, the
 > blocks in the tetrominos are represented by a pair of delete/rubout
