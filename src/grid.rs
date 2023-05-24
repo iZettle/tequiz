@@ -175,7 +175,7 @@ impl Grid {
                 self.clear();
                 self.next_tetromino();
             } else if due_to_gravity {
-                self.gravity_bonus = self.gravity_bonus + 1;
+                self.gravity_bonus = self.gravity_bonus - 1;
             }
         }
     }
