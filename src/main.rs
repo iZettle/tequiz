@@ -80,9 +80,7 @@ struct Game<R, W: Write> {
 
 impl<R: Read, W: Write> Game<R, W> {
     fn new(stdin: R, stdout: W, term_width: u16, term_height: u16, scale: Scale) -> Game<R, RawTerminal<W>> {
-        let grid = grid::Grid::new(
-            time::Duration::from_nanos(1_200_000_000)
-        );
+        let grid = grid::Grid::new();
 
         let f = std::fs::File::open("quizzes.yaml").unwrap();
         let quizzes: Vec<Quiz> = serde_yaml::from_reader(f).unwrap();
@@ -106,12 +104,12 @@ impl<R: Read, W: Write> Game<R, W> {
         self.stdout.flush()?;
 
         let mut b: [u8; 1] = [0];
-        let tick = time::Duration::from_millis(50);
+        let interval = time::Duration::from_millis(50);
         'main: loop {
-            thread::sleep(tick);
+            thread::sleep(interval);
 
             if self.grid.position < grid::WIDTH {
-                self.quiz_rng();
+                //self.quiz_rng();
             }
 
             // process input
@@ -133,6 +131,8 @@ impl<R: Read, W: Write> Game<R, W> {
                     b'l' if self.quiz.is_none() => self.grid.horizontal_move(1),
                     b'k' if self.quiz.is_none() => self.grid.rotate(),
                     b'j' if self.quiz.is_none() => self.grid.fall(false),
+                    b'j' if self.quiz.is_none() => self.grid.fall(false),
+                    b'r' if self.grid.game_over => self.grid.reset(),
 
                     _ => (),
                 }
@@ -141,7 +141,7 @@ impl<R: Read, W: Write> Game<R, W> {
             }
 
             // update grid
-            self.grid.tick(tick);
+            self.grid.tick(interval);
 
             // draw
             self.draw_quiz()?;
@@ -178,6 +178,10 @@ impl<R: Read, W: Write> Game<R, W> {
     }
 
     fn draw_grid(&mut self) -> Result<()> {
+        if self.grid.game_over {
+            return self.draw_game_over();
+        }
+
         let offset_x = self.offset_x + LAYOUT_QUIZ_WIDTH + 2;
 
         for i in 0..self.grid.cells.len() {
@@ -187,8 +191,24 @@ impl<R: Read, W: Write> Game<R, W> {
             let x = offset_x + x as u16 * self.scale.x as u16;
             let y = self.offset_y + y as u16;
             let c = if self.grid.cells[i] { "[]" } else { " ." };
+
             write!(self.stdout, "{}{}", cursor::Goto(x as u16, y as u16), c)?;
         }
+
+        Ok(())
+    }
+
+    fn draw_game_over(&mut self) -> Result<()> {
+        let x = LAYOUT_QUIZ_WIDTH + 2;
+        let y = 1;
+        self.clear_area(x, y, grid::WIDTH as u16 * 2, grid::HEIGHT as u16)?;
+
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 3), "╭──────────╮")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 4), "  G A M E")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 6), "   O V E R")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 7), "╰──────────╯")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 10), "To try again")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 5, y + self.offset_y + 12), "Press 'r'")?;
 
         Ok(())
     }
@@ -198,9 +218,9 @@ impl<R: Read, W: Write> Game<R, W> {
         let offset_x = self.offset_x + LAYOUT_QUIZ_WIDTH + grid_width as u16 + 6;
         let offset_y = self.offset_y + grid::HEIGHT as u16 * self.scale.y as u16;
 
-        write!(self.stdout, "{}{}{}", cursor::Goto(offset_x as u16, (offset_y - 4) as u16), "SCORE: ", self.grid.score)?;
-        write!(self.stdout, "{}{}{}", cursor::Goto(offset_x as u16, (offset_y - 2) as u16), "LEVEL: ", self.grid.level)?;
-        write!(self.stdout, "{}{}{}", cursor::Goto(offset_x as u16, (offset_y - 0) as u16), "LINES: ", self.grid.cleared)?;
+        write!(self.stdout, "{}[{}{: >8}]", cursor::Goto(offset_x as u16, (offset_y - 4) as u16), "SCORE: ", self.grid.score)?;
+        write!(self.stdout, "{}[{}{: >8}]", cursor::Goto(offset_x as u16, (offset_y - 2) as u16), "LEVEL: ", self.grid.level)?;
+        write!(self.stdout, "{}[{}{: >8}]", cursor::Goto(offset_x as u16, (offset_y - 0) as u16), "LINES: ", self.grid.cleared)?;
 
         Ok(())
     }

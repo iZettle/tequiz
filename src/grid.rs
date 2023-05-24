@@ -1,9 +1,10 @@
 use std::time::Duration;
 use rand::{self, rngs::ThreadRng, Rng, thread_rng, seq::SliceRandom};
-use termion::cursor;
 
 pub const WIDTH: u8 = 10;
 pub const HEIGHT: u8 = 20;
+
+pub const INIT_INTERVAL: Duration = Duration::from_nanos(1_000_000_000);
 
 #[derive(Clone)]
 pub struct Tetromino {
@@ -47,27 +48,27 @@ const TETROMINOES: [Tetromino; TETROMINO_VARIANT] = [
         ]
     },
 
-    // [][]      []
-    //   ()[]  ()[]
+    // []()      []
+    //   [][]  []()
     //         []
     Tetromino {
         rotations: [
-            [(0 - WIDTH as i16 - 1), (0 - WIDTH as i16), 0, 1],
-            [(0 - WIDTH as i16 + 1), 0, 1, WIDTH as i16],
-            [(0 - WIDTH as i16 - 1), (0 - WIDTH as i16), 0, 1],
-            [(0 - WIDTH as i16 + 1), 0, 1, WIDTH as i16],
+            [-1, 0, WIDTH as i16, WIDTH as i16 + 1],
+            [0 - WIDTH as i16, -1, 0, WIDTH as i16 - 1],
+            [-1, 0, WIDTH as i16, WIDTH as i16 + 1],
+            [0 - WIDTH as i16, -1, 0, WIDTH as i16 - 1],
         ]
     },
 
-    //   [][]  []
-    // []()    []()
+    //   ()[]  []
+    // [][]    ()[]
     //           []
     Tetromino {
         rotations: [
-            [-1, 0, 0 - WIDTH as i16, 0 - WIDTH as i16 + 1],
-            [0 - WIDTH as i16 - 1, -1, 0, WIDTH as i16],
-            [-1, 0, 0 - WIDTH as i16, 0 - WIDTH as i16 + 1],
-            [0 - WIDTH as i16 - 1, -1, 0, WIDTH as i16],
+            [0, 1, WIDTH as i16 - 1, WIDTH as i16],
+            [0 - WIDTH as i16, 0, 1, WIDTH as i16 + 1],
+            [0, 1, WIDTH as i16 - 1, WIDTH as i16],
+            [0 - WIDTH as i16, 0, 1, WIDTH as i16 + 1],
         ]
     },
 
@@ -83,27 +84,27 @@ const TETROMINOES: [Tetromino; TETROMINO_VARIANT] = [
         ]
     },
 
-    // []      [][]            []
-    // []()[]  ()    []()[]    ()
-    //         []        []  [][]
+    //           []  []      [][]
+    // []()[]    ()  []()[]  ()
+    //     []  [][]          []
     Tetromino {
         rotations: [
-            [0 - WIDTH as i16 - 1, -1, 0, 1],
-            [0 - WIDTH as i16 + 1, 0 - WIDTH as i16, 0, WIDTH as i16],
             [-1, 0, 1, WIDTH as i16 + 1],
             [0 - WIDTH as i16, 0, WIDTH as i16, WIDTH as i16 - 1],
+            [0 - WIDTH as i16 - 1, -1, 0, 1],
+            [0 - WIDTH as i16 + 1, 0 - WIDTH as i16, 0, WIDTH as i16],
         ]
     },
 
-    //   []    []            []
-    // []()[]  ()[] []()[] []()
-    //         []     []     []
+    //          []    []    []
+    // []()[] []()  []()[]  ()[]
+    //   []     []          []
     Tetromino {
         rotations: [
-            [0 - WIDTH as i16, -1, 0, 1],
-            [0 - WIDTH as i16, 0, 1, WIDTH as i16],
             [-1, 0, 1, WIDTH as i16],
             [0 - WIDTH as i16, -1, 0, WIDTH as i16],
+            [0 - WIDTH as i16, -1, 0, 1],
+            [0 - WIDTH as i16, 0, 1, WIDTH as i16],
         ]
     },
 ];
@@ -116,7 +117,7 @@ pub struct Grid {
     pub tetromino_id: Option<usize>,
     pub position: u8,
     pub rotation: u8,
-    pub rate: Duration,
+    pub interval: Duration,
     pub timer: Duration,
     pub gravity_bonus: u8,
 
@@ -126,30 +127,37 @@ pub struct Grid {
     pub level: u8,
 
     pub rng: ThreadRng,
+
+    pub game_over: bool,
 }
 
 impl Grid {
-    pub fn new(rate: Duration) -> Grid {
+    pub fn new() -> Grid {
         Grid {
             cells: [false; (WIDTH * HEIGHT) as usize],
             tetromino_id: None,
             position: 0,
             rotation: 0,
-            rate,
+            interval: INIT_INTERVAL,
             timer: Duration::ZERO,
             gravity_bonus: HEIGHT - 1,
             score: 0,
             cleared: 0,
             level: 0,
             rng: rand::thread_rng(),
+            game_over: false,
         }
     }
 
     pub fn tick(&mut self, interval: Duration) {
+        if self.game_over {
+            return;
+        }
+
         self.timer = self.timer + interval;
 
-        if self.timer >= self.rate {
-            self.timer = self.timer - self.rate;
+        if self.timer >= self.interval {
+            self.timer = self.timer - self.interval;
 
             match self.tetromino_id {
                 Some(_) => self.fall(true),
@@ -159,6 +167,10 @@ impl Grid {
     }
 
     pub fn fall(&mut self, due_to_gravity: bool) {
+        if self.game_over {
+            return;
+        }
+
         if let Some(_) = self.tetromino_id {
             if !self.move_if_can(self.position + WIDTH, self.rotation) {
                 self.clear();
@@ -170,12 +182,20 @@ impl Grid {
     }
 
     pub fn horizontal_move(&mut self, offset: i16) {
+        if self.game_over {
+            return;
+        }
+
         if let Some(_) = self.tetromino_id {
             self.move_if_can((self.position as i16 + offset) as u8, self.rotation);
         }
     }
 
     pub fn rotate(&mut self) {
+        if self.game_over {
+            return;
+        }
+
         if let Some(_) = self.tetromino_id {
             let next_rotation = (self.rotation + 1) % 4;
             if self.move_if_can(self.position, next_rotation) {
@@ -295,13 +315,26 @@ impl Grid {
         self.rotation = 0;
         self.reset_position();
         self.gravity_bonus = 0;
+
+        let placement = TETROMINOES[n].get_cells(self.position, self.rotation);
+
+        for i in 0..placement.len() {
+            if self.cells[placement[i as usize] as usize] {
+                // cannot place new tetromino - GAME OVER!
+                self.game_over = true;
+            }
+        }
     }
 
-    pub fn reset_position(&mut self) {
+    fn reset_position(&mut self) {
         self.position = WIDTH / 2 - 1;
     }
 
     pub fn punish(&mut self) {
+        if self.game_over {
+            return;
+        }
+
         let current = self.tetromino_id.map(|id| {
             TETROMINOES[id].get_cells(self.position, self.rotation)
         });
@@ -333,5 +366,18 @@ impl Grid {
         for i in 0..last_row.len() {
             self.cells[n + i] = last_row[i];
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.tetromino_id = None;
+        self.interval = INIT_INTERVAL;
+        self.timer = Duration::ZERO;
+        self.gravity_bonus =  HEIGHT - 1;
+        self.score = 0;
+        self.cleared = 0;
+        self.level = 0;
+        self.game_over = false;
+
+        self.cells = [false; (WIDTH * HEIGHT) as usize];
     }
 }
