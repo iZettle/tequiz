@@ -242,7 +242,7 @@ impl<R: Read, W: Write> Game<R, W> {
         let y = 1;
 
         write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 3), "╭──────────╮")?;
-        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 4), "   locked  ")?;
+        write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 4), "   locked   ")?;
         write!(self.stdout, "{}{}", cursor::Goto(x + self.offset_x + 4, y + self.offset_y + 5), "╰──────────╯")?;
 
         Ok(())
