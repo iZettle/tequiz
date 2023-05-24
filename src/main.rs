@@ -13,6 +13,11 @@ use quiz::Quiz;
 
 const LAYOUT_QUIZ_WIDTH: u16 = 32;
 
+const ARROW_UP: (u8, u8, u8) = (27, 91, 65);
+const ARROW_DOWN: (u8, u8, u8) = (27, 91, 66);
+const ARROW_LEFT: (u8, u8, u8) = (27, 91, 68);
+const ARROW_RIGHT: (u8, u8, u8) = (27, 91, 67);
+
 fn main() {
     let stdout = io::stdout();
     let stdin = async_stdin();
@@ -103,7 +108,7 @@ impl<R: Read, W: Write> Game<R, W> {
         self.draw_layout()?;
         self.stdout.flush()?;
 
-        let mut b: [u8; 1] = [0];
+        let mut b: [u8; 3] = [0; 3];
         let interval = time::Duration::from_millis(50);
         'main: loop {
             thread::sleep(interval);
@@ -113,31 +118,30 @@ impl<R: Read, W: Write> Game<R, W> {
             }
 
             // process input
-            if self.stdin.read(&mut b).is_ok() {
+            if let Ok(_) = self.stdin.read(&mut b) {
 
-                if b[0] != 0 {
-                    write!(self.stdout, "{}{}", cursor::Goto(1, 1), b[0])?;
-                }
-
-                match b[0] {
+                match (b[0], b[1], b[2]) {
                     // quit
-                    b'\x1b' | b'q' => break 'main,
+                    (b'\x1b', 0, 0) | (b'q', _, _) => break 'main,
 
                     // answer quiz
-                    n @ b'1'..=b'4' => self.answer(n),
+                    (n @ b'1'..=b'4', 0, 0) => self.answer(n),
 
                     // play tetris
-                    b'h' if self.quiz.is_none() => self.grid.horizontal_move(-1),
-                    b'l' if self.quiz.is_none() => self.grid.horizontal_move(1),
-                    b'k' if self.quiz.is_none() => self.grid.rotate(),
-                    b'j' if self.quiz.is_none() => self.grid.fall(false),
-                    b'j' if self.quiz.is_none() => self.grid.fall(false),
-                    b'r' if self.grid.game_over => self.grid.reset(),
+                    (b'h', _, _) | ARROW_LEFT  if self.quiz.is_none() => self.grid.horizontal_move(-1),
+                    (b'l', _, _) | ARROW_RIGHT if self.quiz.is_none() => self.grid.horizontal_move(1),
+                    (b'k', _, _) | ARROW_UP    if self.quiz.is_none() => self.grid.rotate(),
+                    (b'j', _, _) | ARROW_DOWN  if self.quiz.is_none() => self.grid.fall(false),
+
+                    // reset game
+                    (b'r', _, _) if self.grid.game_over => self.grid.reset(),
 
                     _ => (),
                 }
 
                 b[0] = 0;
+                b[1] = 0;
+                b[2] = 0;
             }
 
             // update grid
