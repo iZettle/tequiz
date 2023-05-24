@@ -161,11 +161,20 @@ impl<R: Read, W: Write> Game<R, W> {
     // quiz | tetris grid | status
     fn draw_layout(&mut self) -> Result<()> {
         for y in 1..(grid::HEIGHT * self.scale.y) + 2 {
+            let help_text = match y {
+                3 => "  ↑ / k: rotate",
+                4 => "  ← / h: move left",
+                5 => "  → / l: move right",
+                6 => "  ↓ / j: move down",
+                _ => "",
+            };
+
             let grid_width = grid::WIDTH * self.scale.x;
             let x = self.offset_x + LAYOUT_QUIZ_WIDTH;
             let y = self.offset_y + y as u16;
             write!(self.stdout, "{}<!", cursor::Goto(x, y))?;
-            write!(self.stdout, "{}!>", cursor::Goto(x + grid_width as u16 + 2, y as u16))?;
+
+            write!(self.stdout, "{}!>{}", cursor::Goto(x + grid_width as u16 + 2, y as u16), help_text)?;
         }
 
         for x in 0..grid::WIDTH * self.scale.x {
