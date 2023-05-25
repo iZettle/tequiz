@@ -1,7 +1,73 @@
 ---
-- question: Which one is not a planet?
-  answer: Pluto
+- question: Which one is NOT one of our acquirers?
+  answer: SoftSpace
   wrong_answers:
-    - Mars
-    - Mercury
-    - Venus
+    - Amex
+    - Evry
+    - Fiserv
+- question: Which one is NOT one of our acquirers?
+  answer: Datecs
+  wrong_answers:
+    - Elavon
+    - Evry
+    - GetNetMx
+- question: Which service is the entry point of card-present transactions?
+  answer: reader-payment
+  wrong_answers:
+    - Hiso
+    - Sun
+    - Authorization
+- question: What is NOT done by Clearing service?
+  answer: Clear payment sessions
+  wrong_answers:
+    - Create clearing files
+    - Parse clearing receipts
+    - Publish SettlePayment messages
+- question: PayPal acquired iZettle in ____.
+  answer: 2018
+  wrong_answers:
+    - 2017
+    - 2019
+    - 2077
+- question: Which tool is NOT used for IaC in Payments?
+  answer: Zscaler
+  wrong_answers:
+    - Terraform
+    - Atlantis
+    - (what is IaC...?)
+- question: Which reader supports magnetic stripe?
+  answer: Datecs v1
+  wrong_answers:
+    - Datecs v2
+    - Android Tap to Pay
+    - iOS Tap to Pay
+- question: Which reader does NOT support chip?
+  answer: iOS Tap to Pay
+  wrong_answers:
+    - Datecs v1
+    - Datecs v2
+    - Zettle Terminal
+- question: Which reader does NOT support chip?
+  answer: Android Tap to Pay
+  wrong_answers:
+    - Datecs v1
+    - Datecs v2
+    - Zettle Terminal
+- question: How long time is one oncall rotation?
+  answer: 1 week
+  wrong_answers:
+    - 1 day
+    - 5 days
+    - 2 weeks
+- question: How many HSMs do we run in each DC?
+  answer: 2
+  wrong_answers:
+    - 0
+    - 1
+    - 4
+- question: What can you do with a private key in asymmetric cryptography?
+  answer: Sign data
+  wrong_answers:
+    - Encrypt secrets
+    - Unlock racks in DC
+    - Derive transaction keys
