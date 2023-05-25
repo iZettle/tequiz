@@ -18,10 +18,14 @@ a TUI application.
 ## Installation
 
 ```sh
-# If you don't have this tap:
+# (if need)
 brew tap iZettle/formulae https://github.com/iZettle/homebrew-formulae
 
-brew install tequiz
+# install
+brew install --HEAD izettle/formulae/tequiz
+
+# update
+brew reinstall tequiz
 ```
 
 
