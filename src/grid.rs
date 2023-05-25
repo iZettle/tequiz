@@ -1,6 +1,7 @@
 use std::time::Duration;
 use rand::{self, rngs::ThreadRng, Rng, thread_rng, seq::SliceRandom};
 
+
 pub const WIDTH: u8 = 10;
 pub const HEIGHT: u8 = 20;
 
@@ -174,7 +175,7 @@ impl Grid {
             if !self.move_if_can(self.position + WIDTH, self.rotation) {
                 self.clear();
                 self.next_tetromino();
-            } else if due_to_gravity {
+            } else if due_to_gravity && self.gravity_bonus > 0 {
                 self.gravity_bonus = self.gravity_bonus - 1;
             }
         }
@@ -313,7 +314,7 @@ impl Grid {
         self.tetromino_id = Some(n);
         self.rotation = 0;
         self.reset_position();
-        self.gravity_bonus = 0;
+        self.gravity_bonus = HEIGHT - 1;
 
         let placement = TETROMINOES[n].get_cells(self.position, self.rotation);
 
