@@ -15,6 +15,16 @@ So, after 20 years, I want to implement the game one more time, and make it
 a TUI application.
 
 
+## Installation
+
+```sh
+# If you don't have this tap:
+brew tap iZettle/formulae https://github.com/iZettle/homebrew-formulae
+
+brew install tequiz
+```
+
+
 ## Fun fact:
 
 > The game has monochrome graphics, and in the first revision of the game, the
